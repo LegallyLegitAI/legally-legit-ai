@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-navy: #1e3a5f;
+  --color-navy-dark: #0f1f33;
+  --color-forest: #2d5a3d;
+  --color-forest-light: #4a8b64;
+  --color-gold: #d4a574;
+  --color-gold-light: #e6c8a0;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[--color-navy] text-white px-6 py-3 rounded-lg font-semibold 
+           hover:bg-[--color-navy-dark] transition-all duration-200 
+           shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+  }
+
+  .btn-secondary {
+    @apply bg-[--color-forest] text-white px-6 py-3 rounded-lg font-semibold 
+           hover:bg-[--color-forest-light] transition-all duration-200;
+  }
+
+  .btn-accent {
+    @apply bg-[--color-gold] text-[--color-navy] px-6 py-3 rounded-lg font-semibold 
+           hover:bg-[--color-gold-light] transition-all duration-200;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-[--color-navy] to-[--color-forest] 
+           bg-clip-text text-transparent;
+  }
+}
