@@ -46,16 +46,13 @@ export default function MyDocuments() {
 
   const updateNow = async (doc: any) => {
     setUpdatingId(doc.id);
-    // fetch current rule version
     const { data: rule } = await supabase
       .from("compliance_rules")
       .select("current_version")
       .eq("doc_type", doc.doc_type)
       .single();
-
     const nextVersion = rule?.current_version ?? (doc.rules_version || 1);
 
-    // For demo: simply mark as up-to-date and append a note.
     const updatedContent = `${doc.content}
       <div style="margin-top:12px;padding:10px;background:#ecfeff;border-left:4px solid #06b6d4">
         Updated to rules v${nextVersion}.
@@ -94,26 +91,16 @@ export default function MyDocuments() {
                     </span>
                   )}
                   {doc.is_outdated && (
-                    <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
-                      Outdated
-                    </span>
+                    <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">Outdated</span>
                   )}
                 </div>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => handleDownload(doc.title, doc.content)} className="rounded border px-3 py-1 hover:bg-gray-50">
-                  Download
-                </button>
-                <button onClick={() => handleDelete(doc.id)} className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700">
-                  Delete
-                </button>
+                <button onClick={() => handleDownload(doc.title, doc.content)} className="rounded border px-3 py-1 hover:bg-gray-50">Download</button>
+                <button onClick={() => handleDelete(doc.id)} className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700">Delete</button>
                 {doc.is_outdated && (
-                  <button
-                    onClick={() => updateNow(doc)}
-                    className="rounded bg-emerald-600 px-3 py-1 text-white hover:bg-emerald-700 disabled:opacity-70"
-                    disabled={updatingId === doc.id}
-                  >
+                  <button onClick={() => updateNow(doc)} className="rounded bg-emerald-600 px-3 py-1 text-white hover:bg-emerald-700 disabled:opacity-70" disabled={updatingId === doc.id}>
                     {updatingId === doc.id ? "Updating…" : "Update Now"}
                   </button>
                 )}

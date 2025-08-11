@@ -1,106 +1,47 @@
-import { useState } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { supabase } from "./supabaseClient";
 
-interface DocumentFormProps {
-  template: any
-  onSubmit: (data: Record<string, string>) => void
-}
+export default function DocumentForm({
+  template,
+  onSubmit,
+}: {
+  template: { id: string; title: string; description: string; generateContent: (data: Record<string, string>) => string };
+  onSubmit: (data: Record<string, string>) => void;
+}) {
+  const [title, setTitle] = useState(template.title);
+  const [businessName, setBusinessName] = useState("");
+  const [partyName, setPartyName] = useState("");
+  const [extra, setExtra] = useState("");
 
-export default function DocumentForm({ template, onSubmit }: DocumentFormProps) {
-  const [formData, setFormData] = useState<Record<string, string>>({})
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const navigate = useNavigate();
 
-  const handleChange = (fieldId: string, value: string) => {
-    setFormData(prev => ({ ...prev, [fieldId]: value }))
-    if (errors[fieldId]) {
-      setErrors(prev => {
-        const newErrors = { ...prev }
-        delete newErrors[fieldId]
-        return newErrors
-      })
-    }
-  }
-
-  const validate = () => {
-    const newErrors: Record<string, string> = {}
-    
-    template.fields.forEach((field: any) => {
-      if (field.required && !formData[field.id]) {
-        newErrors[field.id] = `${field.label} is required`
-      }
-    })
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (validate()) {
-      onSubmit(formData)
-    }
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { navigate("/auth"); return; }
+    onSubmit({ title, businessName, partyName, extra });
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {template.fields.map((field: any) => (
-        <div key={field.id}>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {field.label}
-            {field.required && <span className="text-red-500 ml-1">*</span>}
-          </label>
-          
-          {field.type === 'select' ? (
-            <select
-              value={formData[field.id] || ''}
-              onChange={(e) => handleChange(field.id, e.target.value)}
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[--color-navy]"
-            >
-              <option value="">Select {field.label}</option>
-              {field.options?.map((option: string) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          ) : field.type === 'textarea' ? (
-            <textarea
-              value={formData[field.id] || ''}
-              onChange={(e) => handleChange(field.id, e.target.value)}
-              placeholder={field.placeholder}
-              rows={4}
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[--color-navy]"
-            />
-          ) : (
-            <input
-              type={field.type}
-              value={formData[field.id] || ''}
-              onChange={(e) => handleChange(field.id, e.target.value)}
-              placeholder={field.placeholder}
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[--color-navy]"
-            />
-          )}
-          
-          {field.helpText && (
-            <p className="mt-1 text-sm text-gray-500">{field.helpText}</p>
-          )}
-          
-          {field.warning && (
-            <div className="mt-2 flex items-start space-x-2 text-amber-600">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <p className="text-sm">{field.warning}</p>
-            </div>
-          )}
-          
-          {errors[field.id] && (
-            <p className="mt-1 text-sm text-red-600">{errors[field.id]}</p>
-          )}
-        </div>
-      ))}
-
-      <div className="pt-6">
-        <button type="submit" className="btn-primary w-full">
-          Generate Document
-        </button>
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <label className="block">
+        <span className="mb-1 block text-sm">Document Title</span>
+        <input className="w-full rounded border p-2" value={title} onChange={(e) => setTitle(e.target.value)} required />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-sm">Your Business Name</span>
+        <input className="w-full rounded border p-2" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Example Pty Ltd" required />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-sm">Other Party (if any)</span>
+        <input className="w-full rounded border p-2" value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder="Contractor / Employee / Client" />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-sm">Anything specific to include?</span>
+        <textarea className="w-full rounded border p-2" rows={4} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Special clauses, terms, dates, etc." />
+      </label>
+      <button className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Generate Document</button>
     </form>
-  )
+  );
 }

@@ -3,7 +3,7 @@ import { FileText, Download, AlertCircle } from "lucide-react";
 import DocumentForm from "../DocumentForm";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { templates } from "../legalTemplates"; // adjust if needed
+import { templates } from "../legalTemplates";
 
 const STATE_DISCLAIMERS: Record<string, string> = {
   NSW: "⚠️ NSW: Check applicable modern awards and state‑based OHS obligations.",
@@ -76,12 +76,8 @@ export default function Templates() {
       rules_version: 1
     });
 
-    if (error) {
-      console.error("Error saving document:", error.message);
-      alert("Sorry, we couldn’t save your document. Please try again.");
-    } else {
-      alert("Document saved to your account.");
-    }
+    if (error) { console.error("Error saving document:", error.message); alert("Sorry, we couldn’t save your document. Please try again."); }
+    else { alert("Document saved to your account."); }
   };
 
   const handleDownload = () => {
@@ -127,9 +123,7 @@ export default function Templates() {
           </div>
           <div className="prose max-w-none rounded bg-gray-50 p-8" dangerouslySetInnerHTML={{ __html: generatedDocument }} />
           <div className="mt-8 flex gap-4">
-            <button onClick={() => { setGeneratedDocument(null); setSelectedTemplate(null); }} className="rounded border px-3 py-2 hover:bg-gray-50">
-              Create another document
-            </button>
+            <button onClick={() => { setGeneratedDocument(null); setSelectedTemplate(null); }} className="rounded border px-3 py-2 hover:bg-gray-50">Create another document</button>
           </div>
         </div>
       </div>

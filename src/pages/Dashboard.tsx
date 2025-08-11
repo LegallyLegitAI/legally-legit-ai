@@ -1,121 +1,132 @@
-// src/pages/Dashboard.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { Link } from "react-router-dom";
 
-// Adjust this to match your table
-const TABLE_NAME = "compliance_checks";
-
-type ComplianceItem = {
-  id: string | number;
-  industry: string;             // e.g. "healthcare", "construction"
-  is_outdated: boolean;         // boolean flag
-  updated_at?: string | null;   // optional timestamp
-  // Add any other fields you have:
-  // title?: string;
-  // status?: string;
+type DocRow = {
+  id: string;
+  title: string;
+  created_at: string;
+  doc_type?: string | null;
+  rules_version?: number | null;
+  is_outdated?: boolean | null;
 };
 
-function humanize(input: string): string {
-  return input
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+const BASE_REQUIREMENTS = [
+  { key: "employment_agreement", area: "Fair Work / Employment", weight: 20 },
+  { key: "privacy_policy", area: "Privacy Act", weight: 20 },
+  { key: "terms_and_conditions", area: "ACL / Consumer", weight: 20 },
+  { key: "refunds_policy", area: "ACL / Consumer", weight: 10 },
+  { key: "workplace_policy", area: "HR / Safety", weight: 15 },
+];
+
+const INDUSTRY_EXTRA: Record<string, { key: string; area: string; weight: number }[]> = {
+  restaurant_cafe: [{ key: "subcontractor_agreement", area: "Kitchen/trades contractors", weight: 10 }],
+  trades_construction: [{ key: "subcontractor_agreement", area: "Trades / QBCC", weight: 15 }],
+  retail: [],
+  professional_services: [{ key: "nda", area: "Confidentiality", weight: 10 }],
+  other: [],
+};
+
+function labelFromType(key: string) {
+  switch (key) {
+    case "employment_agreement": return "Employment Contract";
+    case "privacy_policy": return "Privacy Policy";
+    case "terms_and_conditions": return "Website Terms & Conditions";
+    case "refunds_policy": return "Refunds & Returns Policy";
+    case "subcontractor_agreement": return "Subcontractor Agreement";
+    case "workplace_policy": return "Workplace Policy";
+    case "nda": return "NDA";
+    default: return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
 }
 
 export default function Dashboard() {
-  const [items, setItems] = useState<ComplianceItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [industry, setIndustry] = useState<string>("other");
+  const [loading, setLoading] = useState(true);
+  const [anyOutdated, setAnyOutdated] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
+    (async () => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) { setLoading(false); return; }
 
-    async function load() {
-      setLoading(true);
-      setErrorMsg("");
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("industry")
+        .eq("id", uid)
+        .single();
 
-      // Update the select list to the columns you actually need
-      const { data, error } = await supabase
-        .from<ComplianceItem>(TABLE_NAME)
-        .select("id, industry, is_outdated, updated_at")
-        .order("updated_at", { ascending: false });
+      setIndustry(profile?.industry || "other");
 
-      if (!isMounted) return;
-      if (error) {
-        setErrorMsg(error.message ?? "Failed to load dashboard data.");
-        setItems([]);
-      } else {
-        setItems(data ?? []);
-      }
+      const { data } = await supabase
+        .from("documents")
+        .select("id,title,created_at,doc_type,rules_version,is_outdated")
+        .order("created_at", { ascending: false });
 
+      const rows = (data as any) || [];
+      setDocs(rows);
+      setAnyOutdated(rows.some((d: DocRow) => !!d.is_outdated));
       setLoading(false);
-    }
-
-    load();
-    return () => {
-      isMounted = false;
-    };
+    })();
   }, []);
 
-  const anyOutdated = useMemo(
-    () => (items || []).some((d: ComplianceItem) => Boolean(d.is_outdated)),
-    [items]
-  );
+  const { score, missing } = useMemo(() => {
+    const req = [...BASE_REQUIREMENTS, ...INDUSTRY_EXTRA[industry]];
+    const have = new Set(docs.map((d) => (d.doc_type || "").toString()));
+    let total = 0;
+    req.forEach((r) => { if (have.has(r.key)) total += r.weight; });
+    return { score: Math.min(100, total), missing: req.filter((r) => !have.has(r.key)) };
+  }, [docs, industry]);
 
   return (
-    <div className="p-6 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        {anyOutdated && (
-          <span className="badge badge-warning text-sm">
-            Some items are marked as Outdated
-          </span>
-        )}
-      </header>
-
-      {loading ? (
-        <div className="animate-pulse text-gray-500">Loading…</div>
-      ) : errorMsg ? (
-        <div className="alert alert-error">
-          <span>{errorMsg}</span>
-        </div>
-      ) : items.length === 0 ? (
-        <div className="text-gray-500">No data found.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th className="text-left">ID</th>
-                <th className="text-left">Industry</th>
-                <th className="text-left">Status</th>
-                <th className="text-left">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((row) => (
-                <tr key={row.id}>
-                  <td className="align-top">{String(row.id)}</td>
-                  <td className="align-top font-medium">
-                    {humanize(row.industry || "")}
-                  </td>
-                  <td className="align-top">
-                    {row.is_outdated ? (
-                      <span className="badge badge-warning">Outdated</span>
-                    ) : (
-                      <span className="badge badge-success">Up to date</span>
-                    )}
-                  </td>
-                  <td className="align-top">
-                    {row.updated_at
-                      ? new Date(row.updated_at).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="space-y-6 p-6">
+      {anyOutdated && (
+        <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-4">
+          <p className="text-sm text-amber-800">
+            Some of your documents may be outdated due to recent legal changes.
+            Visit <Link to="/my-documents" className="underline">My Documents</Link> to update them now.
+          </p>
         </div>
       )}
+
+      <div className="rounded bg-white p-6 shadow">
+        <h2 className="mb-2 text-2xl font-bold">Legal Protection Score</h2>
+        {loading ? (
+          <p>Loading…</p>
+        ) : (
+          <>
+            <div className="text-5xl font-bold">{score}%</div>
+            <p className="opacity-80">
+              Weighted for your industry: <span className="font-medium">{industry.replace(/_/g, " ")}</span>.
+            </p>
+            {!!missing.length && (
+              <div className="mt-4">
+                <h3 className="mb-2 font-semibold">Top gaps</h3>
+                <ul className="ml-5 list-disc">
+                  {missing.map((m) => (
+                    <li key={m.key}>
+                      Missing <span className="font-medium">{labelFromType(m.key)}</span>{" "}
+                      <span className="opacity-70">({m.area})</span>{" "}
+                      <Link to="/templates" className="ml-1 text-blue-600 underline">Fix now →</Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="rounded bg-white p-6 shadow">
+        <h2 className="mb-2 text-2xl font-bold">Quick actions</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link to="/templates" className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Create a document</Link>
+          <Link to="/settings" className="rounded border px-4 py-2 hover:bg-gray-50">Update settings</Link>
+          <Link to="/my-documents" className="rounded border px-4 py-2 hover:bg-gray-50">Review my documents</Link>
+        </div>
+      </div>
     </div>
   );
 }
