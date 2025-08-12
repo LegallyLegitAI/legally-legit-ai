@@ -1,11 +1,25 @@
 // api/risk-alerts.ts
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+// Validate environment variables
+if (!process.env.RESEND_API_KEY) {
+  throw new Error('RESEND_API_KEY is not configured');
+}
+
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Supabase configuration is missing');
+}
+
+if (!process.env.ALERTS_FROM_EMAIL) {
+  throw new Error('ALERTS_FROM_EMAIL is not configured');
+}
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // service key for server-side
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY // service key for server-side
 );
 
 const REQUIREMENTS = [
@@ -25,7 +39,7 @@ function scoreFor(docTypes: string[]) {
   return Math.min(100, total);
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Pull all opted-in users
     const { data: profiles, error: pErr } = await supabase
@@ -66,17 +80,30 @@ export default async function handler(req, res) {
         `→ Review your docs: https://${req.headers.host}/my-documents`,
       ];
 
-      await resend.emails.send({
-        from: process.env.ALERTS_FROM_EMAIL!,
-        to: email,
-        subject,
-        text: bodyLines.join('\n'),
-      });
+      try {
+        await resend.emails.send({
+          from: process.env.ALERTS_FROM_EMAIL!,
+          to: email,
+          subject,
+          text: bodyLines.join('\n'),
+        });
+      } catch (emailError) {
+        console.error(`Failed to send email to ${email}:`, emailError);
+        // Continue processing other users even if one email fails
+      }
     }
 
-    res.status(200).json({ ok: true });
-  } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+    res.status(200).json({ 
+      ok: true, 
+      processed: profiles?.length || 0,
+      timestamp: new Date().toISOString() 
+    });
+  } catch (error) {
+    console.error('Risk alerts cron error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error occurred';
+    res.status(500).json({ 
+      error: message,
+      timestamp: new Date().toISOString()
+    });
   }
 }
